@@ -4,8 +4,8 @@
 
   Grbl post processor configuration.
 
-  $Revision: 44174 c9be104562752d2d82655075e0367708843f3963 $
-  $Date: 2025-04-17 13:58:42 $
+  $Revision: 44175 6653a376dc51c53bcc76d5a5ffc31f394f4c0c67 $
+  $Date: 2025-04-25 11:25:30 $
 
   FORKID {154F7C00-6549-4c77-ADE0-79375FE5F2AA}
 */
@@ -475,6 +475,8 @@ function onCommand(command) {
       }
     } else if (getProperty("useM06")) {
       writeToolBlock(mFormat.format(6));
+    } else {
+      machineSimulation({mode:TOOLCHANGE}); // simulate tool change
     }
     writeComment(tool.comment);
     return;
