@@ -4,8 +4,8 @@
 
   Grbl post processor configuration.
 
-  $Revision: 44182 7116c353db967b3101893a9fbf082bfdfea871ba $
-  $Date: 2025-06-13 07:24:07 $
+  $Revision: 44187 e5b7101e3e3d4be720eb5f7ef1215fd6bea618b9 $
+  $Date: 2025-07-17 05:22:31 $
 
   FORKID {154F7C00-6549-4c77-ADE0-79375FE5F2AA}
 */
@@ -200,7 +200,7 @@ var settings = {
     eulerCalculationMethod: "standard", // ('standard' / 'machine') 'machine' adjusts euler angles to match the machines ABC orientation, machine configuration required
     cancelTiltFirst       : true, // cancel tilted workplane prior to WCS (G54-G59) blocks
     forceMultiAxisIndexing: false, // force multi-axis indexing for 3D programs
-    optimizeType          : undefined // can be set to OPTIMIZE_NONE, OPTIMIZE_BOTH, OPTIMIZE_TABLES, OPTIMIZE_HEADS, OPTIMIZE_AXIS. 'undefined' uses legacy rotations
+    optimizeType          : OPTIMIZE_AXIS // can be set to OPTIMIZE_NONE, OPTIMIZE_BOTH, OPTIMIZE_TABLES, OPTIMIZE_HEADS, OPTIMIZE_AXIS. 'undefined' uses legacy rotations
   },
   comments: {
     permittedCommentChars: " abcdefghijklmnopqrstuvwxyz0123456789.,=_-*:", // letters are not case sensitive, use option 'outputFormat' below. Set to 'undefined' to allow any character
