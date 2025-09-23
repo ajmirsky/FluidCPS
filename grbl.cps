@@ -4,8 +4,8 @@
 
   Grbl post processor configuration.
 
-  $Revision: 44131 932990debebb6682fc2eeec860c18e6e6417efcb $
-  $Date: 2024-06-14 09:23:24 $
+  $Revision: 44143 a6bed23af30910e818b47bd47a2a96f498fdb4f8 $
+  $Date: 2024-09-03 03:29:25 $
 
   FORKID {154F7C00-6549-4c77-ADE0-79375FE5F2AA}
 */
@@ -33,6 +33,7 @@ minimumCircularSweep = toRad(0.01);
 maximumCircularSweep = toRad(180);
 allowHelicalMoves = true;
 allowedCircularPlanes = undefined; // allow any circular motion
+highFeedrate = (unit == MM) ? 5000 : 200;
 
 // user-defined properties
 properties = {
@@ -131,12 +132,12 @@ var gFormat = createFormat({prefix:"G", decimals:0});
 var mFormat = createFormat({prefix:"M", decimals:0});
 
 var xyzFormat = createFormat({decimals:(unit == MM ? 3 : 4)});
-var abcFormat = createFormat({decimals:3, forceDecimal:true, scale:DEG});
+var abcFormat = createFormat({decimals:3, type:FORMAT_REAL, scale:DEG});
 var feedFormat = createFormat({decimals:(unit == MM ? 1 : 2)});
-var inverseTimeFormat = createFormat({decimals:3, forceDecimal:true});
+var inverseTimeFormat = createFormat({decimals:3, type:FORMAT_REAL});
 var toolFormat = createFormat({decimals:0});
 var rpmFormat = createFormat({decimals:0});
-var secFormat = createFormat({decimals:3, forceDecimal:true}); // seconds - range 0.001-1000
+var secFormat = createFormat({decimals:3, type:FORMAT_REAL}); // seconds - range 0.001-1000
 var taperFormat = createFormat({decimals:1, scale:DEG});
 
 var xOutput = createOutputVariable({onchange:function() {state.retractedX = false;}, prefix:"X"}, xyzFormat);
@@ -160,7 +161,7 @@ var gAbsIncModal = createOutputVariable({}, gFormat); // modal group 3 // G90-91
 var gFeedModeModal = createOutputVariable({}, gFormat); // modal group 5 // G93-94
 var gUnitModal = createOutputVariable({}, gFormat); // modal group 6 // G20-21
 var fourthAxisClamp = createOutputVariable({}, mFormat);
-var fithAxisClamp = createOutputVariable({}, mFormat);
+var fifthAxisClamp = createOutputVariable({}, mFormat);
 
 var settings = {
   coolant: {
@@ -482,7 +483,7 @@ function onCommand(command) {
     if (machineConfiguration.isMultiAxisConfiguration()) {
       // writeBlock(fourthAxisClamp.format(25)); // lock 4th axis
       if (machineConfiguration.getNumberOfAxes() > 4) {
-        // writeBlock(fithAxisClamp.format(35)); // lock 5th axis
+        // writeBlock(fifthAxisClamp.format(35)); // lock 5th axis
       }
     }
     return;
@@ -490,7 +491,7 @@ function onCommand(command) {
     if (machineConfiguration.isMultiAxisConfiguration()) {
       // writeBlock(fourthAxisClamp.format(26)); // unlock 4th axis
       if (machineConfiguration.getNumberOfAxes() > 4) {
-        // writeBlock(fithAxisClamp.format(36)); // unlock 5th axis
+        // writeBlock(fifthAxisClamp.format(36)); // unlock 5th axis
       }
     }
     return;
@@ -514,8 +515,13 @@ function onSectionEnd() {
     writeBlock(gFeedModeModal.format(94)); // inverse time feed off
   }
   writeBlock(gPlaneModal.format(17));
-  if (!isLastSection() && (getNextSection().getTool().coolant != tool.coolant)) {
-    setCoolant(COOLANT_OFF);
+  if (!isLastSection()) {
+    if (getNextSection().getTool().coolant != tool.coolant) {
+      setCoolant(COOLANT_OFF);
+    }
+    if (tool.breakControl && isToolChangeNeeded(getNextSection(), getProperty("toolAsName") ? "description" : "number")) {
+      onCommand(COMMAND_BREAK_CONTROL);
+    }
   }
   forceAny();
 }
@@ -702,7 +708,9 @@ function validateCommonParameters() {
   for (var i = 0; i < getNumberOfSections(); ++i) {
     var section = getSection(i);
     if (getSection(0).workOffset == 0 && section.workOffset > 0) {
-      error(localize("Using multiple work offsets is not possible if the initial work offset is 0."));
+      if (!(typeof wcsDefinitions != "undefined" && wcsDefinitions.useZeroOffset)) {
+        error(localize("Using multiple work offsets is not possible if the initial work offset is 0."));
+      }
     }
     if (section.isMultiAxis()) {
       if (!section.isOptimizedForMachine() &&
