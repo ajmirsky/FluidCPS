@@ -1,11 +1,11 @@
 /**
-  Copyright (C) 2012-2023 by Autodesk, Inc.
+  Copyright (C) 2012-2024 by Autodesk, Inc.
   All rights reserved.
 
   Grbl post processor configuration.
 
-  $Revision: 44104 165ed1a9c77e5601dab85a96f32381c0b4a83b25 $
-  $Date: 2023-12-14 12:10:48 $
+  $Revision: 44115 abe43b1cb5d1c57dbcb926eca04460e350c49211 $
+  $Date: 2024-03-15 10:31:09 $
 
   FORKID {154F7C00-6549-4c77-ADE0-79375FE5F2AA}
 */
@@ -16,7 +16,7 @@ vendorUrl = "https://github.com/gnea/grbl/wiki";
 longDescription = "Generic milling post for Grbl. Use 'Split file' property to split files by tool for tool changes.";
 
 // >>>>> INCLUDED FROM ../common/grbl.cps
-legal = "Copyright (C) 2012-2023 by Autodesk, Inc.";
+legal = "Copyright (C) 2012-2024 by Autodesk, Inc.";
 certificationLevel = 2;
 minimumRevision = 45917;
 
@@ -688,11 +688,16 @@ function validateCommonParameters() {
       error(localize("Using multiple work offsets is not possible if the initial work offset is 0."));
     }
     if (section.isMultiAxis()) {
-      if (!section.isOptimizedForMachine() && !getSetting("supportsToolVectorOutput", false)) {
+      if (!section.isOptimizedForMachine() &&
+        (!getSetting("workPlaneMethod.useTiltedWorkplane", false) || !getSetting("supportsToolVectorOutput", false))) {
         error(localize("This postprocessor requires a machine configuration for 5-axis simultaneous toolpath."));
       }
       if (machineConfiguration.getMultiAxisFeedrateMode() == FEED_INVERSE_TIME && !getSetting("supportsInverseTimeFeed", true)) {
         error(localize("This postprocessor does not support inverse time feedrates."));
+      }
+      if (getSetting("supportsToolVectorOutput", false) && !tcp.isSupportedByControl) {
+        error(localize("Incompatible postprocessor settings detected." + EOL +
+        "Setting 'supportsToolVectorOutput' requires setting 'supportsTCP' to be enabled as well."));
       }
     }
   }
@@ -1150,7 +1155,11 @@ function defineWorkPlane(_section, _setWorkPlane) {
     if (_setWorkPlane) {
       if (_section.isMultiAxis() || isPolarModeActive()) { // 4-5x simultaneous operations
         cancelWorkPlane();
-        positionABC(abc, true);
+        if (_section.isOptimizedForMachine()) {
+          positionABC(abc, true);
+        } else {
+          setCurrentDirection(abc);
+        }
       } else { // 3x and/or 3+2x operations
         setWorkPlane(abc);
       }
@@ -1204,15 +1213,18 @@ function getWorkPlaneMachineABC(_section, rotate) {
 // <<<<< INCLUDED FROM include_files/getWorkPlaneMachineABC.cpi
 // >>>>> INCLUDED FROM include_files/positionABC.cpi
 function positionABC(abc, force) {
+  if (!machineConfiguration.isMultiAxisConfiguration()) {
+    error("Function 'positionABC' can only be used with multi-axis machine configurations.");
+  }
   if (typeof unwindABC == "function") {
     unwindABC(abc);
   }
   if (force) {
     forceABC();
   }
-  var a = machineConfiguration.isMultiAxisConfiguration() ? aOutput.format(abc.x) : toolVectorOutputI.format(abc.x);
-  var b = machineConfiguration.isMultiAxisConfiguration() ? bOutput.format(abc.y) : toolVectorOutputJ.format(abc.y);
-  var c = machineConfiguration.isMultiAxisConfiguration() ? cOutput.format(abc.z) : toolVectorOutputK.format(abc.z);
+  var a = aOutput.format(abc.x);
+  var b = bOutput.format(abc.y);
+  var c = cOutput.format(abc.z);
   if (a || b || c) {
     writeRetract(Z);
     if (getSetting("retract.homeXY.onIndexing", false)) {
@@ -1487,14 +1499,23 @@ function forceWorkPlane() {
   currentWorkPlaneABC = undefined;
 }
 
+function cancelWCSRotation() {
+  if (typeof gRotationModal != "undefined" && gRotationModal.getCurrent() == 68) {
+    cancelWorkPlane(true);
+  }
+}
+
 function cancelWorkPlane(force) {
   if (typeof gRotationModal != "undefined") {
     if (force) {
       gRotationModal.reset();
     }
-    writeBlock(gRotationModal.format(69)); // cancel frame
+    var command = gRotationModal.format(69);
+    if (command) {
+      writeBlock(command); // cancel frame
+      forceWorkPlane();
+    }
   }
-  forceWorkPlane();
 }
 
 function setWorkPlane(abc) {
@@ -1744,8 +1765,8 @@ function onLinear5D(_x, _y, _z, _a, _b, _c, feed, feedMode) {
 function writeRetract() {
   var retract = getRetractParameters.apply(this, arguments);
   if (retract && retract.words.length > 0) {
-    if (typeof gRotationModal != "undefined" && gRotationModal.getCurrent() == 68 && settings.retract.cancelRotationOnRetracting) { // cancel rotation before retracting
-      cancelWorkPlane(true);
+    if (typeof cancelWCSRotation == "function" && getSetting("retract.cancelRotationOnRetracting", false)) { // cancel rotation before retracting
+      cancelWCSRotation();
     }
     for (var i in retract.words) {
       var words = retract.singleLine ? retract.words : retract.words[i];
