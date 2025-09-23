@@ -4,8 +4,8 @@
 
   Grbl post processor configuration.
 
-  $Revision: 44130 73e79b0e273912da7faf8963316353b63c83f05f $
-  $Date: 2024-06-10 06:52:01 $
+  $Revision: 44131 932990debebb6682fc2eeec860c18e6e6417efcb $
+  $Date: 2024-06-14 09:23:24 $
 
   FORKID {154F7C00-6549-4c77-ADE0-79375FE5F2AA}
 */
@@ -588,7 +588,7 @@ var state = {
   retractedX              : false, // specifies that the machine has been retracted in X
   retractedY              : false, // specifies that the machine has been retracted in Y
   retractedZ              : false, // specifies that the machine has been retracted in Z
-  tcpisActive             : false, // specifies that TCP is currently active
+  tcpIsActive             : false, // specifies that TCP is currently active
   twpIsActive             : false, // specifies that TWP is currently active
   lengthCompensationActive: !getSetting("outputToolLengthCompensation", true), // specifies that tool length compensation is active
   mainState               : true // specifies the current context of the state (true = main, false = optional)
