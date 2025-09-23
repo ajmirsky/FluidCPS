@@ -4,8 +4,8 @@
 
   Grbl post processor configuration.
 
-  $Revision: 44115 abe43b1cb5d1c57dbcb926eca04460e350c49211 $
-  $Date: 2024-03-15 10:31:09 $
+  $Revision: 44130 73e79b0e273912da7faf8963316353b63c83f05f $
+  $Date: 2024-06-10 06:52:01 $
 
   FORKID {154F7C00-6549-4c77-ADE0-79375FE5F2AA}
 */
@@ -159,6 +159,8 @@ var gPlaneModal = createOutputVariable({onchange:function () {gMotionModal.reset
 var gAbsIncModal = createOutputVariable({}, gFormat); // modal group 3 // G90-91
 var gFeedModeModal = createOutputVariable({}, gFormat); // modal group 5 // G93-94
 var gUnitModal = createOutputVariable({}, gFormat); // modal group 6 // G20-21
+var fourthAxisClamp = createOutputVariable({}, mFormat);
+var fithAxisClamp = createOutputVariable({}, mFormat);
 
 var settings = {
   coolant: {
@@ -208,12 +210,13 @@ var settings = {
     maximumLineLength    : 80 // the maximum number of characters allowed in a line, set to 0 to disable comment output
   },
   maximumSequenceNumber       : undefined, // the maximum sequence number (Nxxx), use 'undefined' for unlimited
-  supportsRadiusCompensation  : false, // specifies if radius compensation is supported on the control
   maximumToolNumber           : 9999, // specifies the maximum allowed tool number
   outputToolLengthCompensation: false, // specifies if tool length compensation code should be output (G43)
   outputToolLengthOffset      : false, // specifies if tool length offset code should be output (Hxx)
-  supportsTCP                 : false, // specifies if the postprocessor does support TCP
-  supportsOptionalBlocks      : false // specifies if optional block output is supported
+  supportsOptionalBlocks      : false, // specifies if optional block output is supported
+  // fixed settings below, do not modify
+  supportsTCP                 : false, // this postprocessor does not support TCP
+  supportsRadiusCompensation  : false // this postprocessor does not support tool radius compensation
 };
 
 function onOpen() {
@@ -476,8 +479,20 @@ function onCommand(command) {
     writeComment(tool.comment);
     return;
   case COMMAND_LOCK_MULTI_AXIS:
+    if (machineConfiguration.isMultiAxisConfiguration()) {
+      // writeBlock(fourthAxisClamp.format(25)); // lock 4th axis
+      if (machineConfiguration.getNumberOfAxes() > 4) {
+        // writeBlock(fithAxisClamp.format(35)); // lock 5th axis
+      }
+    }
     return;
   case COMMAND_UNLOCK_MULTI_AXIS:
+    if (machineConfiguration.isMultiAxisConfiguration()) {
+      // writeBlock(fourthAxisClamp.format(26)); // unlock 4th axis
+      if (machineConfiguration.getNumberOfAxes() > 4) {
+        // writeBlock(fithAxisClamp.format(36)); // unlock 5th axis
+      }
+    }
     return;
   case COMMAND_BREAK_CONTROL:
     return;
@@ -573,7 +588,9 @@ var state = {
   retractedX              : false, // specifies that the machine has been retracted in X
   retractedY              : false, // specifies that the machine has been retracted in Y
   retractedZ              : false, // specifies that the machine has been retracted in Z
-  lengthCompensationActive: false, // specifies that tool length compensation is active
+  tcpisActive             : false, // specifies that TCP is currently active
+  twpIsActive             : false, // specifies that TWP is currently active
+  lengthCompensationActive: !getSetting("outputToolLengthCompensation", true), // specifies that tool length compensation is active
   mainState               : true // specifies the current context of the state (true = main, false = optional)
 };
 var validateLengthCompensation = getSetting("outputToolLengthCompensation", true); // disable validation when outputToolLengthCompensation is disabled
@@ -1192,7 +1209,7 @@ function isTCPSupportedByOperation(_section) {
 validate(settings.machineAngles, "Setting 'machineAngles' is required but not defined.");
 function getWorkPlaneMachineABC(_section, rotate) {
   var currentABC = isFirstSection() ? new Vector(0, 0, 0) : getCurrentABC();
-  var abc = machineConfiguration.getABCByPreference(_section.workPlane, currentABC, settings.machineAngles.controllingAxis, settings.machineAngles.type, settings.machineAngles.options);
+  var abc = _section.getABCByPreference(machineConfiguration, _section.workPlane, currentABC, settings.machineAngles.controllingAxis, settings.machineAngles.type, settings.machineAngles.options);
   if (!isSameDirection(machineConfiguration.getDirection(abc), _section.workPlane.forward)) {
     error(localize("Orientation not supported."));
   }
@@ -1494,6 +1511,14 @@ function writeProgramHeader() {
 // <<<<< INCLUDED FROM include_files/writeProgramHeader.cpi
 
 // >>>>> INCLUDED FROM include_files/workPlaneFunctions_fanuc.cpi
+var gRotationModal = createOutputVariable({current : 69,
+  onchange: function () {
+    state.twpIsActive = gRotationModal.getCurrent() != 69;
+    if (typeof probeVariables != "undefined") {
+      probeVariables.outputRotationCodes = probeVariables.probeAngleMethod == "G68";
+    }
+  }}, gFormat);
+
 var currentWorkPlaneABC = undefined;
 function forceWorkPlane() {
   currentWorkPlaneABC = undefined;
@@ -1588,7 +1613,6 @@ function writeInitialPositioning(position, isRequired, codes1, codes2) {
     break;
   }
   var feed = (highFeedMapping != HIGH_FEED_NO_MAPPING) ? getFeed(highFeedrate) : "";
-  var gOffset = getSetting("outputToolLengthCompensation", true) ? gFormat.format(getOffsetCode()) : "";
   var hOffset = getSetting("outputToolLengthOffset", true) ? hFormat.format(tool.lengthOffset) : "";
   var additionalCodes = [formatWords(codes1), formatWords(codes2)];
 
@@ -1609,20 +1633,18 @@ function writeInitialPositioning(position, isRequired, codes1, codes2) {
       setWorkPlane(angles);
       writeBlock(modalCodes, gMotionModal.format(motionCode.multi), xOutput.format(prePosition.x), yOutput.format(prePosition.y), feed, additionalCodes[0]);
       cancelWorkPlane();
-      writeBlock(gOffset, hOffset, additionalCodes[1]); // omit Z-axis output is desired
-      state.lengthCompensationActive = true;
+      writeBlock(getOffsetCode(), hOffset, additionalCodes[1]); // omit Z-axis output is desired
       forceAny(); // required to output XYZ coordinates in the following line
     } else {
       if (machineConfiguration.isHeadConfiguration()) {
-        writeBlock(modalCodes, gMotionModal.format(motionCode.multi), gOffset,
+        writeBlock(modalCodes, gMotionModal.format(motionCode.multi), getOffsetCode(),
           xOutput.format(position.x), yOutput.format(position.y), zOutput.format(position.z),
           hOffset, feed, additionalCodes
         );
       } else {
         writeBlock(modalCodes, gMotionModal.format(motionCode.multi), xOutput.format(position.x), yOutput.format(position.y), feed, additionalCodes[0]);
-        writeBlock(gMotionModal.format(motionCode.single), gOffset, zOutput.format(position.z), hOffset, additionalCodes[1]);
+        writeBlock(gMotionModal.format(motionCode.single), getOffsetCode(), zOutput.format(position.z), hOffset, additionalCodes[1]);
       }
-      state.lengthCompensationActive = true;
     }
     forceModals(gMotionModal);
     if (isRequired) {
@@ -1768,6 +1790,9 @@ function writeRetract() {
     if (typeof cancelWCSRotation == "function" && getSetting("retract.cancelRotationOnRetracting", false)) { // cancel rotation before retracting
       cancelWCSRotation();
     }
+    if (typeof disableLengthCompensation == "function" && getSetting("allowCancelTCPBeforeRetracting", false) && state.tcpIsActive) {
+      disableLengthCompensation(); // cancel TCP before retracting
+    }
     for (var i in retract.words) {
       var words = retract.singleLine ? retract.words : retract.words[i];
       switch (retract.method) {
@@ -1801,12 +1826,23 @@ function writeRetract() {
 }
 // <<<<< INCLUDED FROM include_files/writeRetract_fanuc.cpi
 // >>>>> INCLUDED FROM include_files/getOffsetCode_fanuc.cpi
+var toolLengthCompOutput = createOutputVariable({control : CONTROL_FORCE,
+  onchange: function() {
+    state.tcpIsActive = toolLengthCompOutput.getCurrent() == 43.4 || toolLengthCompOutput.getCurrent() == 43.5;
+    state.lengthCompensationActive = toolLengthCompOutput.getCurrent() != 49;
+  }
+}, gFormat);
+
 function getOffsetCode() {
+  if (!getSetting("outputToolLengthCompensation", true) && toolLengthCompOutput.isEnabled()) {
+    state.lengthCompensationActive = true; // always assume that length compensation is active
+    toolLengthCompOutput.disable();
+  }
   var offsetCode = 43;
   if (tcp.isSupportedByOperation) {
     offsetCode = machineConfiguration.isMultiAxisConfiguration() ? 43.4 : 43.5;
   }
-  return offsetCode;
+  return toolLengthCompOutput.format(offsetCode);
 }
 // <<<<< INCLUDED FROM include_files/getOffsetCode_fanuc.cpi
 // <<<<< INCLUDED FROM ../common/grbl.cps
