@@ -4,8 +4,8 @@
 
   Grbl post processor configuration.
 
-  $Revision: 44187 e5b7101e3e3d4be720eb5f7ef1215fd6bea618b9 $
-  $Date: 2025-07-17 05:22:31 $
+  $Revision: 44188 98f153782a93410c0e8057794989ed85766a9771 $
+  $Date: 2025-07-25 14:00:30 $
 
   FORKID {154F7C00-6549-4c77-ADE0-79375FE5F2AA}
 */
@@ -265,13 +265,24 @@ function onSection() {
   var newWorkOffset = isNewWorkOffset() || splitHere || forceSectionRestart;
   var newWorkPlane = isNewWorkPlane() || splitHere || forceSectionRestart;
 
-  if (insertToolCall || newWorkOffset || newWorkPlane) {
-    // stop spindle before retract during tool change
-    if (insertToolCall && !isFirstSection() && !splitHere) {
-      onCommand(COMMAND_STOP_SPINDLE);
+  if (insertToolCall || newWorkOffset || newWorkPlane || state.tcpIsActive || currentSection.isMultiAxis()) {
+    if (insertToolCall && !isFirstSection()) {
+      onCommand(COMMAND_COOLANT_OFF); // turn off coolant before retract during tool change
+      onCommand(COMMAND_STOP_SPINDLE); // stop spindle before retract during tool change
     }
     if (getProperty("splitFile") == "none") {
-      writeRetract(Z);
+      writeRetract(Z); // retract
+    }
+    if (isFirstSection()) {
+      cancelWorkPlane(machineConfiguration.isMultiAxisConfiguration() && settings.workPlaneMethod.useTiltedWorkplane);
+      if (machineConfiguration.isMultiAxisConfiguration()) {
+        positionABC(new Vector(0, 0, 0));
+      }
+      forceABC();
+    } else {
+      if (insertToolCall || isNewWorkPlane) {
+        cancelWorkPlane();
+      }
     }
   }
 
@@ -338,7 +349,7 @@ function onSection() {
   }
   writeWCS(currentSection, true);
 
-  var abc = defineWorkPlane(currentSection, true);
+  var abc = defineWorkPlane(currentSection, !machineConfiguration.isHeadConfiguration());
 
   setCoolant(tool.coolant); // writes the required coolant codes
 
@@ -1718,17 +1729,16 @@ function setWorkPlane(abc) {
     if (getSetting("retract.homeXY.onIndexing", false)) {
       writeRetract(settings.retract.homeXY.onIndexing);
     }
-    if (currentSection.getId() > 0 && (isTCPSupportedByOperation(getSection(currentSection.getId() - 1) || tcp.isSupportedByOperation)) && typeof disableLengthCompensation == "function") {
-      disableLengthCompensation(); // cancel TCP
+    if ((state.lengthCompensationActive || state.tcpIsActive) && typeof disableLengthCompensation == "function") {
+      disableLengthCompensation(); // cancel tool lenght compensation / TCP prior to output TWP
     }
-
     if (settings.workPlaneMethod.useTiltedWorkplane) {
       onCommand(COMMAND_UNLOCK_MULTI_AXIS);
       cancelWorkPlane();
       if (machineConfiguration.isMultiAxisConfiguration()) {
         var machineABC = abc.isNonZero() ? (currentSection.isMultiAxis() ? getCurrentDirection() : getWorkPlaneMachineABC(currentSection, false)) : abc;
         if (settings.workPlaneMethod.useABCPrepositioning || machineABC.isZero()) {
-          positionABC(machineABC, false);
+          positionABC(machineABC);
         } else {
           setCurrentABC(machineABC);
         }
@@ -1785,26 +1795,68 @@ function writeInitialPositioning(position, isRequired, codes1, codes2) {
       disableLengthCompensation(!isRequired); // cancel tool length compensation prior to enabling it, required when switching G43/G43.4 modes
     }
 
-    // multi axis prepositioning with TWP
-    if (currentSection.isMultiAxis() && getSetting("workPlaneMethod.prepositionWithTWP", true) && getSetting("workPlaneMethod.useTiltedWorkplane", false) &&
-      tcp.isSupportedByOperation && getCurrentDirection().isNonZero()) {
-      var W = machineConfiguration.isMultiAxisConfiguration() ? machineConfiguration.getOrientation(getCurrentDirection()) :
-        Matrix.getOrientationFromDirection(getCurrentDirection());
-      var prePosition = W.getTransposed().multiply(position);
-      var angles = W.getEuler2(settings.workPlaneMethod.eulerConvention);
-      setWorkPlane(angles);
+    if (machineConfiguration.isHeadConfiguration()) { // head/head head/table kinematics
+      var machineABC = currentSection.isMultiAxis() ? defineWorkPlane(currentSection, false) : getWorkPlaneMachineABC(currentSection, false);
+      machineConfiguration.setToolLength(getSetting("workPlaneMethod.compensateToolLength", false) ? getBodyLength(currentSection.getTool()) : 0); // define the tool length for head adjustments
+      var mode = currentSection.isOptimizedForMachine() ? TCP_XYZ_OPTIMIZED : TCP_XYZ;
+      var globalPosition = getGlobalPosition(currentSection.getInitialPosition());
+      var machinePosition = machineConfiguration.getOptimizedPosition(globalPosition, machineABC, mode, OPTIMIZE_BOTH, true);
+      var prePosition = (currentSection.isOptimizedForMachine() || currentSection.isMultiAxis()) ? position :
+        (settings.workPlaneMethod.useTiltedWorkplane && !tcp.isSupportedByMachine) ? machinePosition : globalPosition;
+
+      cancelWorkPlane();
+      positionABC(machineABC);
+      if ((getSetting("workPlaneMethod.useTiltedWorkplane", false) && tcp.isSupportedByMachine  && getCurrentDirection().isNonZero()) || tcp.isSupportedByOperation) {
+        writeBlock(getOffsetCode(true), hOffset); // force TCP for prepositioning although the operation may not require it
+      }
       writeBlock(modalCodes, gMotionModal.format(motionCode.multi), xOutput.format(prePosition.x), yOutput.format(prePosition.y), feed, additionalCodes[0]);
       machineSimulation({x:prePosition.x, y:prePosition.y});
-      cancelWorkPlane();
-      writeBlock(getOffsetCode(), hOffset, additionalCodes[1]); // omit Z-axis output is desired
-      forceAny(); // required to output XYZ coordinates in the following line
+      if (currentSection.isMultiAxis() || getSetting("headPositioningMethod", 0) == 1) {
+        var lengthComp = state.lengthCompensationActive ? {code:undefined, hOffset:undefined} : {code:getOffsetCode(), hOffset:hOffset};
+        writeBlock(modalCodes, gMotionModal.format(motionCode.single), lengthComp.code, zOutput.format(prePosition.z), lengthComp.hOffset, additionalCodes[1]);
+        machineSimulation({z:prePosition.z});
+      }
+
+      if (!currentSection.isMultiAxis()) {
+        if (state.tcpIsActive && !tcp.isSupportedByOperation && typeof disableLengthCompensation == "function") {
+          disableLengthCompensation();
+        }
+        if (getSetting("workPlaneMethod.useTiltedWorkplane", false) && getCurrentDirection().isNonZero()) {
+          var saveRetractedState = [state.retractedX, state.retractedY, state.retractedZ];
+          state.retractedX = state.retractedY = state.retractedZ = true; // set retracted states to true to avoid retraction
+          defineWorkPlane(currentSection, true); // apply workplane for the operation if TWP is supported
+          [state.retractedX, state.retractedY, state.retractedZ] = saveRetractedState; // restore retracted states
+        }
+        if (!state.lengthCompensationActive) {
+          if (state.twpIsActive) {
+            forceXYZ();
+          }
+          if (getSetting("headPositioningMethod", 0) == 1) {
+            writeBlock(modalCodes, gMotionModal.format(motionCode.multi), xOutput.format(position.x), yOutput.format(position.y));
+            machineSimulation({x:position.x, y:position.y});
+            writeBlock(modalCodes, gMotionModal.format(motionCode.single), getOffsetCode(), zOutput.format(position.z), hOffset);
+            machineSimulation({z:position.z});
+          } else {
+            writeBlock(modalCodes, getOffsetCode(), gMotionModal.format(motionCode.single), xOutput.format(position.x), yOutput.format(position.y), zOutput.format(position.z), hOffset);
+            machineSimulation({x:position.x, y:position.y, z:position.z});
+          }
+        }
+      }
+      forceFeed();
     } else {
-      if (machineConfiguration.isHeadConfiguration()) {
-        writeBlock(modalCodes, gMotionModal.format(motionCode.multi), getOffsetCode(),
-          xOutput.format(position.x), yOutput.format(position.y), zOutput.format(position.z),
-          hOffset, feed, additionalCodes
-        );
-        machineSimulation({x:position.x, y:position.y, z:position.z});
+      // multi axis prepositioning with TWP
+      if (currentSection.isMultiAxis() && getSetting("workPlaneMethod.prepositionWithTWP", true) && getSetting("workPlaneMethod.useTiltedWorkplane", false) &&
+        tcp.isSupportedByOperation && getCurrentDirection().isNonZero()) {
+        var W = machineConfiguration.isMultiAxisConfiguration() ? machineConfiguration.getOrientation(getCurrentDirection()) :
+          Matrix.getOrientationFromDirection(getCurrentDirection());
+        var prePosition = W.getTransposed().multiply(position);
+        var angles = W.getEuler2(settings.workPlaneMethod.eulerConvention);
+        setWorkPlane(angles);
+        writeBlock(modalCodes, gMotionModal.format(motionCode.multi), xOutput.format(prePosition.x), yOutput.format(prePosition.y), feed, additionalCodes[0]);
+        machineSimulation({x:prePosition.x, y:prePosition.y});
+        cancelWorkPlane();
+        writeBlock(getOffsetCode(), hOffset, additionalCodes[1]); // omit Z-axis output is desired
+        forceAny(); // required to output XYZ coordinates in the following line
       } else {
         writeBlock(modalCodes, gMotionModal.format(motionCode.multi), xOutput.format(position.x), yOutput.format(position.y), feed, additionalCodes[0]);
         machineSimulation({x:position.x, y:position.y});
@@ -1828,6 +1880,9 @@ function writeInitialPositioning(position, isRequired, codes1, codes2) {
     }
     writeBlock(modalCodes, gMotionModal.format(motionCode.multi), xOutput.format(position.x), yOutput.format(position.y), feed, additionalCodes);
     machineSimulation({x:position.x, y:position.y});
+  }
+  if (machineConfiguration.isMultiAxisConfiguration() && !currentSection.isMultiAxis()) {
+    onCommand(COMMAND_LOCK_MULTI_AXIS);
   }
 }
 
@@ -2008,13 +2063,13 @@ var toolLengthCompOutput = createOutputVariable({control : CONTROL_FORCE,
   }
 }, gFormat);
 
-function getOffsetCode() {
+function getOffsetCode(forceTCP) {
   if (!getSetting("outputToolLengthCompensation", true) && toolLengthCompOutput.isEnabled()) {
     state.lengthCompensationActive = true; // always assume that length compensation is active
     toolLengthCompOutput.disable();
   }
   var offsetCode = 43;
-  if (tcp.isSupportedByOperation) {
+  if (tcp.isSupportedByOperation || forceTCP) {
     offsetCode = machineConfiguration.isMultiAxisConfiguration() ? 43.4 : 43.5;
   }
   return toolLengthCompOutput.format(offsetCode);
