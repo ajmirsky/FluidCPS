@@ -4,8 +4,8 @@
 
   Grbl post processor configuration.
 
-  $Revision: 44192 e342e4ca9f31b4c80e76467e990dd05b641d3c43 $
-  $Date: 2025-09-01 12:45:50 $
+  $Revision: 44195 b291a8a39e704678228667016237559bb9f87f7c $
+  $Date: 2025-09-16 08:34:14 $
 
   FORKID {154F7C00-6549-4c77-ADE0-79375FE5F2AA}
 */
@@ -281,7 +281,7 @@ function onSection() {
       }
       forceABC();
     } else {
-      if (insertToolCall || isNewWorkPlane) {
+      if (insertToolCall || newWorkPlane) {
         cancelWorkPlane();
       }
     }
@@ -945,17 +945,20 @@ function onPassThrough(text) {
 
 function forceModals() {
   if (arguments.length == 0) { // reset all modal variables listed below
-    if (typeof gMotionModal != "undefined") {
-      gMotionModal.reset();
+    var modals = [
+      "gMotionModal",
+      "gPlaneModal",
+      "gAbsIncModal",
+      "gFeedModeModal",
+      "feedOutput"
+    ];
+    if (operationNeedsSafeStart && (typeof currentSection != "undefined" && currentSection.isMultiAxis())) {
+      modals.push("fourthAxisClamp", "fifthAxisClamp", "sixthAxisClamp");
     }
-    if (typeof gPlaneModal != "undefined") {
-      gPlaneModal.reset();
-    }
-    if (typeof gAbsIncModal != "undefined") {
-      gAbsIncModal.reset();
-    }
-    if (typeof gFeedModeModal != "undefined") {
-      gFeedModeModal.reset();
+    for (var i = 0; i < modals.length; ++i) {
+      if (typeof this[modals[i]] != "undefined") {
+        this[modals[i]].reset();
+      }
     }
   } else {
     for (var i in arguments) {
@@ -1548,7 +1551,6 @@ function writeToolCall(tool, insertToolCall) {
 }
 // <<<<< INCLUDED FROM include_files/writeToolCall.cpi
 // >>>>> INCLUDED FROM include_files/startSpindle.cpi
-
 function startSpindle(tool, insertToolCall) {
   if (tool.type != TOOL_PROBE) {
     var spindleSpeedIsRequired = insertToolCall || forceSpindleSpeed || isFirstSection() ||
