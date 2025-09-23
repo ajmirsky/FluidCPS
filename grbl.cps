@@ -4,8 +4,8 @@
 
   Grbl post processor configuration.
 
-  $Revision: 44188 98f153782a93410c0e8057794989ed85766a9771 $
-  $Date: 2025-07-25 14:00:30 $
+  $Revision: 44191 10f6400eaf1c75a27c852ee82b57479e7a9134c0 $
+  $Date: 2025-08-21 13:23:15 $
 
   FORKID {154F7C00-6549-4c77-ADE0-79375FE5F2AA}
 */
@@ -263,7 +263,8 @@ function onSection() {
   var insertToolCall = isToolChangeNeeded("number") || forceSectionRestart;
   var splitHere = getProperty("splitFile") == "toolpath" || (getProperty("splitFile") == "tool" && insertToolCall);
   var newWorkOffset = isNewWorkOffset() || splitHere || forceSectionRestart;
-  var newWorkPlane = isNewWorkPlane() || splitHere || forceSectionRestart;
+  var newWorkPlane = isNewWorkPlane() || splitHere || forceSectionRestart || (typeof defineWorkPlane == "function" &&
+    Vector.diff(defineWorkPlane(getPreviousSection(), false), defineWorkPlane(currentSection, false)).length > 1e-4);
 
   if (insertToolCall || newWorkOffset || newWorkPlane || state.tcpIsActive || currentSection.isMultiAxis()) {
     if (insertToolCall && !isFirstSection()) {
@@ -357,7 +358,7 @@ function onSection() {
 
   // prepositioning
   var initialPosition = getFramePosition(currentSection.getInitialPosition());
-  var isRequired = insertToolCall || state.retractedZ || !state.lengthCompensationActive  || (!isFirstSection() && getPreviousSection().isMultiAxis());
+  var isRequired = insertToolCall || state.retractedZ || !state.lengthCompensationActive || (!isFirstSection() && getPreviousSection().isMultiAxis());
   writeInitialPositioning(initialPosition, isRequired);
 }
 
@@ -671,7 +672,7 @@ function activateMachine() {
     safeRetractDistance = getProperty("safeRetractDistance");
   }
 
-  if (revision >= 50294)  {
+  if (revision >= 50294) {
     activateAutoPolarMode({tolerance:tolerance / 2, optimizeType:OPTIMIZE_AXIS, expandCycles:getSetting("polarCycleExpandMode", EXPAND_ALL)});
   }
 
@@ -694,7 +695,7 @@ function getBodyLength(tool) {
     if (tool.number == section.getTool().number) {
       if (section.hasParameter("operation:tool_assemblyGaugeLength")) { // For Fusion
         return section.getParameter("operation:tool_assemblyGaugeLength", tool.bodyLength + tool.holderLength);
-      } else  { // Legacy products
+      } else { // Legacy products
         return section.getParameter("operation:tool_overallLength", tool.bodyLength + tool.holderLength);
       }
     }
@@ -905,7 +906,7 @@ function formatComment(text) {
     text = filterText(String(text), _permittedCommentChars);
   }
   text = String(text).substring(0, settings.comments.maximumLineLength - prefix.length - suffix.length);
-  return text != "" ?  prefix + text + suffix : "";
+  return text != "" ? prefix + text + suffix : "";
 }
 
 /**
@@ -1192,7 +1193,7 @@ function machineSimulation(parameters) {
   if (feed === undefined && typeof gMotionModal !== "undefined") {
     feed = gMotionModal.getCurrent() !== 0;
   }
-  var mode  = parameters.mode;
+  var mode = parameters.mode;
   var performToolChange = mode == TOOLCHANGE;
   if (mode !== undefined && ![TCPON, TCPOFF, TWPON, TWPOFF, TOOLCHANGE, RETRACTTOOLAXIS].includes(mode)) {
     error(subst("Mode '%1' is not supported.", mode));
@@ -1369,7 +1370,8 @@ function defineWorkPlane(_section, _setWorkPlane) {
 function isTCPSupportedByOperation(_section) {
   var _tcp = _section.getOptimizedTCPMode() == OPTIMIZE_NONE;
   if (!_section.isMultiAxis() && (settings.workPlaneMethod.useTiltedWorkplane ||
-    isSameDirection(machineConfiguration.getSpindleAxis(), getForwardDirection(_section)) ||
+    (machineConfiguration.isMultiAxisConfiguration() && settings.workPlaneMethod.optimizeType != undefined ?
+      getWorkPlaneMachineABC(_section, false).isZero() : isSameDirection(machineConfiguration.getSpindleAxis(), getForwardDirection(_section))) ||
     settings.workPlaneMethod.optimizeType == OPTIMIZE_HEADS ||
     settings.workPlaneMethod.optimizeType == OPTIMIZE_TABLES ||
     settings.workPlaneMethod.optimizeType == OPTIMIZE_BOTH)) {
@@ -1636,7 +1638,7 @@ function writeProgramHeader() {
       writeComment("  " + localize("model") + ": " + model);
     }
     if (mDescription) {
-      writeComment("  " + localize("description") + ": "  + mDescription);
+      writeComment("  " + localize("description") + ": " + mDescription);
     }
   }
 
@@ -1806,7 +1808,7 @@ function writeInitialPositioning(position, isRequired, codes1, codes2) {
 
       cancelWorkPlane();
       positionABC(machineABC);
-      if ((getSetting("workPlaneMethod.useTiltedWorkplane", false) && tcp.isSupportedByMachine  && getCurrentDirection().isNonZero()) || tcp.isSupportedByOperation) {
+      if ((getSetting("workPlaneMethod.useTiltedWorkplane", false) && tcp.isSupportedByMachine && getCurrentDirection().isNonZero()) || tcp.isSupportedByOperation) {
         writeBlock(getOffsetCode(true), hOffset); // force TCP for prepositioning although the operation may not require it
       }
       writeBlock(modalCodes, gMotionModal.format(motionCode.multi), xOutput.format(prePosition.x), yOutput.format(prePosition.y), feed, additionalCodes[0]);
