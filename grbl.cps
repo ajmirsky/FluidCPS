@@ -4,8 +4,8 @@
 
   Grbl post processor configuration.
 
-  $Revision: 44175 6653a376dc51c53bcc76d5a5ffc31f394f4c0c67 $
-  $Date: 2025-04-25 11:25:30 $
+  $Revision: 44182 7116c353db967b3101893a9fbf082bfdfea871ba $
+  $Date: 2025-06-13 07:24:07 $
 
   FORKID {154F7C00-6549-4c77-ADE0-79375FE5F2AA}
 */
@@ -658,6 +658,10 @@ function activateMachine() {
   }
   if (typeof safeRetractDistance == "number" && getProperty("safeRetractDistance") != undefined && getProperty("safeRetractDistance") != 0) {
     safeRetractDistance = getProperty("safeRetractDistance");
+  }
+
+  if (revision >= 50294)  {
+    activateAutoPolarMode({tolerance:tolerance / 2, optimizeType:OPTIMIZE_AXIS, expandCycles:getSetting("polarCycleExpandMode", EXPAND_ALL)});
   }
 
   if (machineConfiguration.isHeadConfiguration() && getSetting("workPlaneMethod.compensateToolLength", false)) {
