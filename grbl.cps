@@ -1,12 +1,12 @@
 /**
-  Copyright (C) 2012-2020 by Autodesk, Inc.
+  Copyright (C) 2012-2022 by Autodesk, Inc.
   All rights reserved.
 
   Grbl post processor configuration.
 
-  $Revision: 43010 7a1bf224aaeb03276140cf7c51b0548f1afd8eaf $
-  $Date: 2020-11-11 23:30:12 $
-  
+  $Revision: 43749 b15db1c012255524d69a4941e4dd5b0a625d9b32 $
+  $Date: 2022-04-07 16:30:03 $
+
   FORKID {154F7C00-6549-4c77-ADE0-79375FE5F2AA}
 */
 
@@ -16,9 +16,9 @@ vendorUrl = "https://github.com/gnea/grbl/wiki";
 longDescription = "Generic milling post for Grbl. Use 'Split file' property to split files by tool for tool changes.";
 
 // >>>>> INCLUDED FROM ../common/grbl.cps
-legal = "Copyright (C) 2012-2020 by Autodesk, Inc.";
+legal = "Copyright (C) 2012-2022 by Autodesk, Inc.";
 certificationLevel = 2;
-minimumRevision = 40783;
+minimumRevision = 45702;
 
 extension = "nc";
 setCodePage("ascii");
@@ -36,48 +36,109 @@ allowedCircularPlanes = undefined; // allow any circular motion
 
 // user-defined properties
 properties = {
-  writeMachine: true, // write machine
-  writeTools: true, // writes the tools
-  safePositionMethod: "G28", // specifies the desired safe position option
-  showSequenceNumbers: false, // show sequence numbers
-  sequenceNumberStart: 10, // first sequence number
-  sequenceNumberIncrement: 1, // increment for sequence numbers
-  separateWordsWithSpace: true, // specifies that the words should be separated with a white space
-  useToolChanger: true, // output T-code on tool changes
-  useM06: false, // output M06 with tool changes
-  splitFile: "none" // split files
-};
-
-// user-defined property definitions
-propertyDefinitions = {
-  writeMachine: {title:"Write machine", description:"Output the machine settings in the header of the code.", group:0, type:"boolean"},
-  writeTools: {title:"Write tool list", description:"Output a tool list in the header of the code.", group:0, type:"boolean"},
-  safePositionMethod: {
-    title: "Safe Retracts",
-    description: "Select your desired retract option. 'Clearance Height' retracts to the operation clearance height.",
-    type: "enum",
-    values:[
-      {title:"G28", id: "G28"},
-      {title:"G53", id: "G53"},
-      {title:"Clearance Height", id: "clearanceHeight"}
-    ]
+  writeMachine: {
+    title      : "Write machine",
+    description: "Output the machine settings in the header of the code.",
+    group      : "formats",
+    type       : "boolean",
+    value      : true,
+    scope      : "post"
   },
-  showSequenceNumbers: {title:"Use sequence numbers", description:"Use sequence numbers for each block of outputted code.", group:1, type:"boolean"},
-  sequenceNumberStart: {title:"Start sequence number", description:"The number at which to start the sequence numbers.", group:1, type:"integer"},
-  sequenceNumberIncrement: {title:"Sequence number increment", description:"The amount by which the sequence number is incremented by in each block.", group:1, type:"integer"},
-  separateWordsWithSpace: {title:"Separate words with space", description:"Adds spaces between words if 'yes' is selected.", type:"boolean"},
-  useToolChanger: {title:"Output tool number", description:"Disable to disallow the output of tool numbers (Txx).", type:"boolean"},
-  useM06: {title:"Output M6", description:"Disable to disallow the output of M6 on tool changes.", type:"boolean"},
+  writeTools: {
+    title      : "Write tool list",
+    description: "Output a tool list in the header of the code.",
+    group      : "formats",
+    type       : "boolean",
+    value      : true,
+    scope      : "post"
+  },
+  safePositionMethod: {
+    title      : "Safe Retracts",
+    description: "Select your desired retract option. 'Clearance Height' retracts to the operation clearance height.",
+    group      : "homePositions",
+    type       : "enum",
+    values     : [
+      {title:"G28", id:"G28"},
+      {title:"G53", id:"G53"},
+      {title:"Clearance Height", id:"clearanceHeight"}
+    ],
+    value: "G28",
+    scope: "post"
+  },
+  showSequenceNumbers: {
+    title      : "Use sequence numbers",
+    description: "'Yes' outputs sequence numbers on each block, 'Only on tool change' outputs sequence numbers on tool change blocks only, and 'No' disables the output of sequence numbers.",
+    group      : "formats",
+    type       : "enum",
+    values     : [
+      {title:"Yes", id:"true"},
+      {title:"No", id:"false"},
+      {title:"Only on tool change", id:"toolChange"}
+    ],
+    value: "false",
+    scope: "post"
+  },
+  sequenceNumberStart: {
+    title      : "Start sequence number",
+    description: "The number at which to start the sequence numbers.",
+    group      : "formats",
+    type       : "integer",
+    value      : 10,
+    scope      : "post"
+  },
+  sequenceNumberIncrement: {
+    title      : "Sequence number increment",
+    description: "The amount by which the sequence number is incremented by in each block.",
+    group      : "formats",
+    type       : "integer",
+    value      : 1,
+    scope      : "post"
+  },
+  separateWordsWithSpace: {
+    title      : "Separate words with space",
+    description: "Adds spaces between words if 'yes' is selected.",
+    group      : "formats",
+    type       : "boolean",
+    value      : true,
+    scope      : "post"
+  },
+  useToolCall: {
+    title      : "Output tool number",
+    description: "Disable to disallow the output of tool numbers (Txx).",
+    group      : "preferences",
+    type       : "boolean",
+    value      : true,
+    scope      : "post"
+  },
+  useM06: {
+    title      : "Output M6",
+    description: "Disable to disallow the output of M6 on tool changes.",
+    group      : "preferences",
+    type       : "boolean",
+    value      : false,
+    scope      : "post"
+  },
   splitFile: {
-    title: "Split file",
+    title      : "Split file",
     description: "Select your desired file splitting option.",
-    type: "enum",
-    values:[
+    group      : "preferences",
+    type       : "enum",
+    values     : [
       {title:"No splitting", id:"none"},
       {title:"Split by tool", id:"tool"},
       {title:"Split by toolpath", id:"toolpath"}
-    ]
+    ],
+    value: "none",
+    scope: "post"
   }
+};
+
+// wcs definiton
+wcsDefinitions = {
+  useZeroOffset: false,
+  wcs          : [
+    {name:"Standard", format:"G", range:[54, 59]}
+  ]
 };
 
 var numberOfToolSlots = 9999;
@@ -87,16 +148,17 @@ var singleLineCoolant = false; // specifies to output multiple coolant codes in 
 // samples:
 // {id: COOLANT_THROUGH_TOOL, on: 88, off: 89}
 // {id: COOLANT_THROUGH_TOOL, on: [8, 88], off: [9, 89]}
+// {id: COOLANT_THROUGH_TOOL, on: "M88 P3 (myComment)", off: "M89"}
 var coolants = [
-  {id: COOLANT_FLOOD, on: 8},
-  {id: COOLANT_MIST},
-  {id: COOLANT_THROUGH_TOOL},
-  {id: COOLANT_AIR},
-  {id: COOLANT_AIR_THROUGH_TOOL},
-  {id: COOLANT_SUCTION},
-  {id: COOLANT_FLOOD_MIST},
-  {id: COOLANT_FLOOD_THROUGH_TOOL},
-  {id: COOLANT_OFF, off: 9}
+  {id:COOLANT_FLOOD, on:8},
+  {id:COOLANT_MIST},
+  {id:COOLANT_THROUGH_TOOL},
+  {id:COOLANT_AIR},
+  {id:COOLANT_AIR_THROUGH_TOOL},
+  {id:COOLANT_SUCTION},
+  {id:COOLANT_FLOOD_MIST},
+  {id:COOLANT_FLOOD_THROUGH_TOOL},
+  {id:COOLANT_OFF, off:9}
 ];
 
 var gFormat = createFormat({prefix:"G", decimals:0});
@@ -130,6 +192,7 @@ var WARNING_WORK_OFFSET = 0;
 
 // collected state
 var sequenceNumber;
+var forceSpindleSpeed = false;
 var currentWorkOffset;
 var retracted = false; // specifies that the tool has been retracted to the safe plane
 
@@ -141,9 +204,9 @@ function writeBlock() {
   if (!text) {
     return;
   }
-  if (properties.showSequenceNumbers) {
+  if (getProperty("showSequenceNumbers") == "true") {
     writeWords2("N" + sequenceNumber, arguments);
-    sequenceNumber += properties.sequenceNumberIncrement;
+    sequenceNumber += getProperty("sequenceNumberIncrement");
   } else {
     writeWords(arguments);
   }
@@ -154,6 +217,16 @@ function formatComment(text) {
 }
 
 /**
+  Writes the specified block - used for tool changes only.
+*/
+function writeToolBlock() {
+  var show = getProperty("showSequenceNumbers");
+  setProperty("showSequenceNumbers", (show == "true" || show == "toolChange") ? "true" : "false");
+  writeBlock(arguments);
+  setProperty("showSequenceNumbers", show);
+}
+
+/**
   Output a comment.
 */
 function writeComment(text) {
@@ -161,11 +234,11 @@ function writeComment(text) {
 }
 
 function onOpen() {
-  if (!properties.separateWordsWithSpace) {
+  if (!getProperty("separateWordsWithSpace")) {
     setWordSeparator("");
   }
 
-  sequenceNumber = properties.sequenceNumberStart;
+  sequenceNumber = getProperty("sequenceNumberStart");
 
   if (programName) {
     writeComment(programName);
@@ -179,7 +252,7 @@ function onOpen() {
   var model = machineConfiguration.getModel();
   var description = machineConfiguration.getDescription();
 
-  if (properties.writeMachine && (vendor || model || description)) {
+  if (getProperty("writeMachine") && (vendor || model || description)) {
     writeComment(localize("Machine"));
     if (vendor) {
       writeComment("  " + localize("vendor") + ": " + vendor);
@@ -193,7 +266,7 @@ function onOpen() {
   }
 
   // dump tool information
-  if (properties.writeTools) {
+  if (getProperty("writeTools")) {
     var zRanges = {};
     if (is3D()) {
       var numberOfSections = getNumberOfSections();
@@ -237,7 +310,7 @@ function onOpen() {
     }
   }
 
-  if (properties.splitFile != "none") {
+  if (getProperty("splitFile") != "none") {
     writeComment(localize("***THIS FILE DOES NOT CONTAIN NC CODE***"));
     return;
   }
@@ -283,8 +356,8 @@ function onSection() {
     currentSection.getForceToolChange && currentSection.getForceToolChange() ||
     (tool.number != getPreviousSection().getTool().number);
 
-  var splitHere = properties.splitFile == "toolpath" || (properties.splitFile == "tool" && insertToolCall);
-  
+  var splitHere = getProperty("splitFile") == "toolpath" || (getProperty("splitFile") == "tool" && insertToolCall);
+
   retracted = false; // specifies that the tool has been retracted to the safe plane
   var newWorkOffset = isFirstSection() ||
     (getPreviousSection().workOffset != currentSection.workOffset) ||
@@ -302,7 +375,7 @@ function onSection() {
     if (insertToolCall && !isFirstSection()) {
       onCommand(COMMAND_STOP_SPINDLE);
     }
-    if (properties.splitFile == "none" || isRedirecting()) {
+    if (getProperty("splitFile") == "none" || isRedirecting()) {
       writeRetract(Z);
     }
   }
@@ -312,9 +385,9 @@ function onSection() {
   if (splitHere) {
     if (!isFirstSection()) {
       setCoolant(COOLANT_OFF);
-    
+
       writeRetract(X, Y);
-    
+
       onImpliedCommand(COMMAND_END);
       onCommand(COMMAND_STOP_SPINDLE);
       writeBlock(mFormat.format(30)); // stop program, spindle stop, coolant off
@@ -324,11 +397,11 @@ function onSection() {
     }
 
     var subprogram;
-    if (properties.splitFile == "toolpath") {
+    if (getProperty("splitFile") == "toolpath") {
       var comment;
       if (hasParameter("operation-comment")) {
         comment = getParameter("operation-comment");
-        
+
       } else {
         comment = getCurrentSectionId();
       }
@@ -345,9 +418,9 @@ function onSection() {
     // }
     // subprogram = _subprogram;
     subprograms.push(subprogram);
-    
+
     var path = FileSystem.getCombinedPath(FileSystem.getFolderPath(getOutputPath()), String(subprogram).replace(/[<>:"/\\|?*]/g, "") + "." + extension);
-    
+
     writeComment(localize("Load tool number " + tool.number + " and subprogram " + subprogram));
 
     redirectToFile(path);
@@ -373,7 +446,7 @@ function onSection() {
     }
 
   }
-  
+
   if (hasParameter("operation-comment")) {
     var comment = getParameter("operation-comment");
     if (comment) {
@@ -388,13 +461,13 @@ function onSection() {
       warning(localize("Tool number exceeds maximum value."));
     }
 
-    if (properties.useToolChanger) {
-      writeBlock("T" + toolFormat.format(tool.number), conditional(properties.useM06, mFormat.format(6)));
-      if (!isFirstSection() && !properties.useM06) {
+    if (getProperty("useToolCall")) {
+      writeToolBlock("T" + toolFormat.format(tool.number), conditional(getProperty("useM06"), mFormat.format(6)));
+      if (!isFirstSection() && !getProperty("useM06")) {
         writeComment(localize("CHANGE TO T") + tool.number);
       }
-    } else if (properties.useM06) {
-      writeBlock(mFormat.format(6));
+    } else if (getProperty("useM06")) {
+      writeToolBlock(mFormat.format(6));
     }
     if (tool.comment) {
       writeComment(tool.comment);
@@ -416,11 +489,13 @@ function onSection() {
       }
     }
   }
-  
-  if (insertToolCall ||
-      isFirstSection() ||
-      (rpmFormat.areDifferent(spindleSpeed, sOutput.getCurrent())) ||
-      (tool.clockwise != getPreviousSection().getTool().clockwise)) {
+
+  var spindleChanged = tool.type != TOOL_PROBE &&
+    (insertToolCall || forceSpindleSpeed || isFirstSection() ||
+    (rpmFormat.areDifferent(spindleSpeed, sOutput.getCurrent())) ||
+    (tool.clockwise != getPreviousSection().getTool().clockwise));
+  if (spindleChanged) {
+    forceSpindleSpeed = false;
     if (spindleSpeed < 1) {
       error(localize("Spindle speed out of range."));
     }
@@ -436,21 +511,10 @@ function onSection() {
   if (insertToolCall) { // force work offset when changing tool
     currentWorkOffset = undefined;
   }
-  var workOffset = currentSection.workOffset;
-  if (workOffset == 0) {
-    warningOnce(localize("Work offset has not been specified. Using G54 as WCS."), WARNING_WORK_OFFSET);
-    workOffset = 1;
-  }
-  if (workOffset > 0) {
-    if (workOffset > 6) {
-      error(localize("Work offset out of range."));
-      return;
-    } else {
-      if (workOffset != currentWorkOffset) {
-        writeBlock(gFormat.format(53 + workOffset)); // G54->G59
-        currentWorkOffset = workOffset;
-      }
-    }
+
+  if (currentSection.workOffset != currentWorkOffset) {
+    writeBlock(currentSection.wcs);
+    currentWorkOffset = currentSection.workOffset;
   }
 
   forceXYZ();
@@ -603,7 +667,7 @@ function forceCircular(plane) {
 
 function onCircular(clockwise, cx, cy, cz, x, y, z, feed) {
   // one of X/Y and I/J are required and likewise
-  
+
   if (pendingRadiusCompensation >= 0) {
     error(localize("Radius compensation cannot be activated/deactivated for a circular move."));
     return;
@@ -653,15 +717,25 @@ function onCircular(clockwise, cx, cy, cz, x, y, z, feed) {
 }
 
 var mapCommand = {
-  COMMAND_STOP:0,
-  COMMAND_END:2,
-  COMMAND_SPINDLE_CLOCKWISE:3,
-  COMMAND_SPINDLE_COUNTERCLOCKWISE:4,
-  COMMAND_STOP_SPINDLE:5
+  COMMAND_STOP                    : 0,
+  COMMAND_END                     : 2,
+  COMMAND_SPINDLE_CLOCKWISE       : 3,
+  COMMAND_SPINDLE_COUNTERCLOCKWISE: 4,
+  COMMAND_STOP_SPINDLE            : 5
 };
 
 function onCommand(command) {
   switch (command) {
+  case COMMAND_STOP:
+    writeBlock(mFormat.format(0));
+    forceSpindleSpeed = true;
+    forceCoolant = true;
+    return;
+  case COMMAND_OPTIONAL_STOP:
+    writeBlock(mFormat.format(1));
+    forceSpindleSpeed = true;
+    forceCoolant = true;
+    return;
   case COMMAND_START_SPINDLE:
     onCommand(tool.clockwise ? COMMAND_SPINDLE_CLOCKWISE : COMMAND_SPINDLE_COUNTERCLOCKWISE);
     return;
@@ -696,10 +770,10 @@ function onSectionEnd() {
 function writeRetract() {
   var words = []; // store all retracted axes in an array
   var retractAxes = new Array(false, false, false);
-  var method = properties.safePositionMethod;
+  var method = getProperty("safePositionMethod");
   if (method == "clearanceHeight") {
     if (!is3D()) {
-      error(localize("Retract option 'Clearance Height' is not supported for multi-axis machining."));
+      error(localize("Safe retract option 'Clearance Height' is only supported when all operations are along the setup Z-axis."));
     }
     return;
   }
@@ -771,6 +845,7 @@ function writeRetract() {
 
 var currentCoolantMode = COOLANT_OFF;
 var coolantOff = undefined;
+var forceCoolant = false;
 
 function setCoolant(coolant) {
   var coolantCodes = getCoolantCodes(coolant);
@@ -792,21 +867,22 @@ function getCoolantCodes(coolant) {
   if (!coolants) {
     error(localize("Coolants have not been defined."));
   }
-  if (isProbeOperation()) { // avoid coolant output for probing
+  if (tool.type == TOOL_PROBE) { // avoid coolant output for probing
     coolant = COOLANT_OFF;
   }
-  if (coolant == currentCoolantMode) {
+  if (coolant == currentCoolantMode && (!forceCoolant || coolant == COOLANT_OFF)) {
     return undefined; // coolant is already active
   }
-  if ((coolant != COOLANT_OFF) && (currentCoolantMode != COOLANT_OFF) && (coolantOff != undefined)) {
+  if ((coolant != COOLANT_OFF) && (currentCoolantMode != COOLANT_OFF) && (coolantOff != undefined) && !forceCoolant) {
     if (Array.isArray(coolantOff)) {
       for (var i in coolantOff) {
-        multipleCoolantBlocks.push(mFormat.format(coolantOff[i]));
+        multipleCoolantBlocks.push(coolantOff[i]);
       }
     } else {
-      multipleCoolantBlocks.push(mFormat.format(coolantOff));
+      multipleCoolantBlocks.push(coolantOff);
     }
   }
+  forceCoolant = false;
 
   var m;
   var coolantCodes = {};
@@ -839,12 +915,17 @@ function getCoolantCodes(coolant) {
   } else {
     if (Array.isArray(m)) {
       for (var i in m) {
-        multipleCoolantBlocks.push(mFormat.format(m[i]));
+        multipleCoolantBlocks.push(m[i]);
       }
     } else {
-      multipleCoolantBlocks.push(mFormat.format(m));
+      multipleCoolantBlocks.push(m);
     }
     currentCoolantMode = coolant;
+    for (var i in multipleCoolantBlocks) {
+      if (typeof multipleCoolantBlocks[i] == "number") {
+        multipleCoolantBlocks[i] = mFormat.format(multipleCoolantBlocks[i]);
+      }
+    }
     return multipleCoolantBlocks; // return the single formatted coolant value
   }
   return undefined;
@@ -863,5 +944,9 @@ function onClose() {
   if (isRedirecting()) {
     closeRedirection();
   }
+}
+
+function setProperty(property, value) {
+  properties[property].current = value;
 }
 // <<<<< INCLUDED FROM ../common/grbl.cps
