@@ -4,8 +4,8 @@
 
   Grbl post processor configuration.
 
-  $Revision: 44195 b291a8a39e704678228667016237559bb9f87f7c $
-  $Date: 2025-09-16 08:34:14 $
+  $Revision: 44207 3c29ebc507e8e59a0898c47558016451f197da94 $
+  $Date: 2025-12-17 08:29:21 $
 
   FORKID {154F7C00-6549-4c77-ADE0-79375FE5F2AA}
 */
@@ -872,7 +872,7 @@ function writeComment(text) {
   if (!text) {
     return;
   }
-  var comments = String(text).split(EOL);
+  var comments = String(text).split(/\r?\n/);
   for (comment in comments) {
     var _comment = formatComment(comments[comment]);
     if (_comment) {
@@ -1124,7 +1124,7 @@ var isTcpOn;
   machineSimulation({x:toPreciseUnit(200, MM), y:toPreciseUnit(200, MM), coordinates:MACHINE, mode:TOOLCHANGE});
 */
 function machineSimulation(parameters) {
-  if (revision < 50198 || skipBlocks) {
+  if (revision < 50198 || skipBlocks || (getSimulationStreamPath() == "" && !debugSimulation)) {
     return; // return when post kernel revision is lower than 50198 or when skipBlocks is enabled
   }
   getAxisLimit = function(axis, limit) {
