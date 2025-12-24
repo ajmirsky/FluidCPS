@@ -1,19 +1,30 @@
-Grbl Post Processor for Fusion 360
+# FluidCPS
 
-For [GRBL](https://github.com/gnea/grbl/wiki)
+This is a Fusion 360 post processor for Autodesk's Fusion 360 CAM.
 
-[Download](https://cam.autodesk.com/posts/download.php?name=grbl&type=post)
+Based on the [GRBL Post Processor](https://cam.autodesk.com/hsmposts?p=grbl) whose history can be found on the
+[grbl_cps branch](https://github.com/ajmirsky/FluidCPS/tree/grbl_cps).
 
-[Sample](https://cam.autodesk.com/posts/view.php?name=grbl)
 
-[Share](https://cam.autodesk.com/hsmposts?p=grbl)
+## Getting Started
 
-[RSS](https://cam.autodesk.com/posts/rss.php?name=grbl)
+1. Download the zip file or clone the repository.
+2. Go to Fusion 360 and open the Manufacturing view.
+3. Right-click on the Setup and select "Create NC Program"
 
-Purpose: Milling
+![NC Program](https://github.com/ajmirsky/FluidCPS/blob/main/imgs/fusion360_screen1.png)
 
-Changed: 8 days ago
+4. In the 'Machine and Post' section, click the folder icon next to the 'Post' setting. 
 
-Extension: nc
+![Post Setting](https://github.com/ajmirsky/FluidCPS/blob/main/imgs/fusion360_screen2.png)
 
-Generic milling post for Grbl. Use 'Split file' property to split files by tool for tool changes.
+5. And click the import icon. Select the `fluidnc.cps` file.
+
+![Post Import](https://github.com/ajmirsky/FluidCPS/blob/main/imgs/fusion360_screen3.png)
+
+## Additions
+
+- [ ] plasma machine support
+- [ ] laser cutting support
+- [ ] waterjet support
+- [ ] probe operations
