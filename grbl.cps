@@ -4,8 +4,8 @@
 
   Grbl post processor configuration.
 
-  $Revision: 44202 75321388625570b1eb8f09c1a5b057c8e188ae50 $
-  $Date: 2025-11-07 10:23:36 $
+  $Revision: 44207 3c29ebc507e8e59a0898c47558016451f197da94 $
+  $Date: 2025-12-17 08:29:21 $
 
   FORKID {154F7C00-6549-4c77-ADE0-79375FE5F2AA}
 */
@@ -872,7 +872,7 @@ function writeComment(text) {
   if (!text) {
     return;
   }
-  var comments = String(text).split(EOL);
+  var comments = String(text).split(/\r?\n/);
   for (comment in comments) {
     var _comment = formatComment(comments[comment]);
     if (_comment) {
